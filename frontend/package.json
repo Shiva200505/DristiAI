@@ -1,0 +1,8 @@
+{
+  "name": "drishti-ai-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/main/index.js",
+  "scripts": { "start": "electron ." },
+  "dependencies": { "@vitejs/plugin-react": "latest", "electron": "latest", "react": "latest", "react-dom": "latest", "vite": "latest" }
+}

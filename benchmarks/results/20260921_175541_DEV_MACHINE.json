@@ -1,0 +1,25 @@
+{
+  "device": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "arch": "AMD64",
+    "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "ram_gb": 15.71,
+    "active_backend": "CPU",
+    "npu_available": false,
+    "npu_detail": "Not measured on Snapdragon hardware",
+    "gpu_available": false,
+    "gpu_name": "Unknown",
+    "snapdragon_detected": false,
+    "device_label": "DEV_MACHINE"
+  },
+  "timestamp": "2026-09-21T12:25:41.867599+00:00",
+  "component": "scanner",
+  "iterations": 3,
+  "mean_ms": 0.319800009795775,
+  "p50_ms": 0.06280001252889633,
+  "p95_ms": 0.8452000329270959,
+  "p99_ms": 0.8452000329270959,
+  "std_dev_ms": 0.37154306918830704,
+  "backend_used": "CPU_FALLBACK",
+  "notes": "Development machine measurement; not Snapdragon hardware"
+}
