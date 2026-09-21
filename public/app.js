@@ -85,6 +85,126 @@ function toast(title, message, tone = '') {
   setTimeout(() => { element.classList.add('out'); setTimeout(() => element.remove(), 250); }, 5000);
 }
 
+function closeCommandPalette() {
+  $('#command-palette')?.classList.add('hidden');
+}
+
+function openCommandPalette() {
+  const palette = $('#command-palette');
+  const input = $('#command-input');
+  const list = $('#command-list');
+  if (!palette || !input || !list) return;
+
+  const commands = [
+    { label: 'Scan current file', hint: 'Run the local security analyzer', run: async () => { closeCommandPalette(); setView('live'); await runScan(); } },
+    { label: 'Open live security', hint: 'Watch the active file and pipeline', run: () => { closeCommandPalette(); setView('live'); } },
+    { label: 'Open findings', hint: 'Review and filter detected risks', run: () => { closeCommandPalette(); setView('findings'); } },
+    { label: 'Index local workspace', hint: 'Send the workspace to the local knowledge adapter', run: async () => { closeCommandPalette(); setView('knowledge'); await indexWorkspace(); } },
+    { label: 'Run local benchmark', hint: 'Measure the deterministic scanner on this machine', run: async () => { closeCommandPalette(); setView('performance'); await runBenchmark(); } },
+    { label: 'Open privacy center', hint: 'Review local-only processing status', run: () => { closeCommandPalette(); setView('privacy'); } },
+    { label: 'Open settings', hint: 'Configure workspace preferences', run: () => { closeCommandPalette(); setView('settings'); } }
+  ];
+
+  const renderCommands = () => {
+    const query = input.value.trim().toLowerCase();
+    const visible = commands.filter(command => `${command.label} ${command.hint}`.toLowerCase().includes(query));
+    list.innerHTML = visible.length
+      ? visible.map((command, index) => `<button class="command-item" data-command-index="${commands.indexOf(command)}"><span>${escapeHtml(command.label)}</span><small>${escapeHtml(command.hint)}</small></button>`).join('')
+      : '<p class="command-empty">No matching local command.</p>';
+    $$('.command-item', list).forEach(button => button.addEventListener('click', () => commands[Number(button.dataset.commandIndex)].run()));
+  };
+
+  input.value = '';
+  renderCommands();
+  input.oninput = renderCommands;
+  palette.classList.remove('hidden');
+  input.focus();
+}
+
+async function indexWorkspace() {
+  const buttons = [$('#index-document'), $('#knowledge-refresh')].filter(Boolean);
+  const labels = buttons.map(button => button.innerHTML);
+  buttons.forEach(button => { button.disabled = true; button.innerHTML = 'Indexing…'; });
+  try {
+    const result = await api('/api/knowledge/index', { method: 'POST', body: '{}' });
+    const chunks = result.indexed_chunks ?? result.chunks_indexed ?? result.chunks;
+    const detail = chunks === undefined ? 'The local knowledge adapter accepted the workspace.' : `${chunks} local chunks are ready for retrieval.`;
+    toast('Workspace indexed', detail, 'success');
+  } catch (error) {
+    toast('Indexing unavailable', error.message, 'warn');
+  } finally {
+    buttons.forEach((button, index) => { button.disabled = false; button.innerHTML = labels[index]; });
+  }
+}
+
+async function runBenchmark() {
+  const button = $('#run-benchmark');
+  if (!button) return;
+  const label = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = 'Measuring…';
+  try {
+    const result = await api('/api/benchmark', { method: 'POST', body: '{}' });
+    const measured = `${result.durationMs} ms`;
+    if ($('#benchmark-scan-value')) $('#benchmark-scan-value').textContent = measured;
+    if ($('#benchmark-scan-time')) $('#benchmark-scan-time').textContent = 'just now';
+    toast('Benchmark complete', `Rule analysis took ${measured} on this development machine.`, 'success');
+  } catch (error) {
+    toast('Benchmark unavailable', error.message, 'warn');
+  } finally {
+    button.disabled = false;
+    button.innerHTML = label;
+  }
+}
+
+function toggleButton(toggle, force) {
+  if (!toggle) return false;
+  const enabled = typeof force === 'boolean' ? force : !toggle.classList.contains('active');
+  toggle.classList.toggle('active', enabled);
+  toggle.setAttribute('aria-pressed', String(enabled));
+  return enabled;
+}
+
+function loadSettings() {
+  try {
+    const settings = JSON.parse(localStorage.getItem('drishti.settings') || '{}');
+    if (settings.analysisMode && $('#analysis-mode')) $('#analysis-mode').value = settings.analysisMode;
+    if (settings.minimumSeverity && $('#minimum-severity')) $('#minimum-severity').value = settings.minimumSeverity;
+    if (typeof settings.scanOnSave === 'boolean') toggleButton($('#scan-on-save-toggle'), settings.scanOnSave);
+    if (Array.isArray(settings.languages)) $$('.language-pill').forEach(pill => pill.classList.toggle('active', settings.languages.includes(pill.dataset.language)));
+    if (typeof settings.privacyLocalOnly === 'boolean') {
+      const enabled = toggleButton($('#privacy-toggle'), settings.privacyLocalOnly);
+      const status = $('#privacy-toggle')?.closest('.toggle-wrap')?.querySelector('small');
+      if (status) status.textContent = enabled ? 'ON' : 'OFF';
+    }
+  } catch { /* Browser storage may be disabled; the UI still remains usable. */ }
+}
+
+function saveSettings() {
+  const settings = {
+    analysisMode: $('#analysis-mode')?.value,
+    scanOnSave: $('#scan-on-save-toggle')?.classList.contains('active'),
+    minimumSeverity: $('#minimum-severity')?.value,
+    languages: $$('.language-pill.active').map(pill => pill.dataset.language),
+    privacyLocalOnly: $('#privacy-toggle')?.classList.contains('active')
+  };
+  try { localStorage.setItem('drishti.settings', JSON.stringify(settings)); } catch { /* Keep the session setting in memory. */ }
+  toast('Settings saved', 'Workspace preferences are stored in this browser.', 'success');
+}
+
+function focusEditor() {
+  const panel = $('#editor-panel');
+  const button = $('#editor-focus');
+  if (!panel || !button) return;
+  const focused = panel.classList.toggle('focused');
+  button.setAttribute('aria-label', focused ? 'Exit focused editor' : 'Focus editor');
+  button.textContent = focused ? '×' : '⌗';
+  if (focused) {
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (state.sourceEditing) $('#source-input')?.focus();
+  }
+}
+
 function detailMarkup(finding) {
   const resolved = finding.status === 'resolved';
   return `<div class="detail-kicker">${finding.severity.toUpperCase()} RISK · ${escapeHtml(finding.ruleId)}</div>
@@ -274,16 +394,60 @@ async function initialize() {
   $('#save-source').addEventListener('click', saveSource);
   $('#drawer-close').addEventListener('click', closeDetail);
   $('#patch-close').addEventListener('click', closePatch);
+  $('#command-close').addEventListener('click', closeCommandPalette);
   $('#detail-overlay').addEventListener('click', event => { if (event.target.id === 'detail-overlay') closeDetail(); });
   $('#patch-overlay').addEventListener('click', event => { if (event.target.id === 'patch-overlay') closePatch(); });
+  $('#command-palette').addEventListener('click', event => { if (event.target.id === 'command-palette') closeCommandPalette(); });
   $('#mobile-menu').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
-  $('#privacy-toggle').addEventListener('click', event => { const toggle = event.currentTarget; toggle.classList.toggle('active'); const enabled = toggle.classList.contains('active'); toast(enabled ? 'Local-only mode enabled' : 'Local-only mode paused', enabled ? 'Source code will remain on this device.' : 'Review network settings before continuing.', enabled ? 'success' : 'warn'); });
-  $('#index-document').addEventListener('click', () => toast('Indexing started', 'Local document indexing is queued; no network access is required.', 'success'));
-  $('#save-settings').addEventListener('click', () => toast('Settings saved', 'Workspace preferences were stored locally.', 'success'));
+  $('#workspace-switcher').addEventListener('click', openCommandPalette);
+  $('#workspace-switcher').addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openCommandPalette(); } });
+  $('#search-button').addEventListener('click', openCommandPalette);
+  $('#runtime-info').addEventListener('click', () => {
+    setView('performance');
+    const runtime = state.runtime || { backend: 'CPU / Development', network: 'offline', measuredOn: 'This development machine' };
+    toast('Runtime information', `${runtime.backend} · ${runtime.network} · ${runtime.measuredOn}.`, '');
+  });
+  $('#user-menu').addEventListener('click', () => { setView('settings'); toast('Workspace profile', 'Priya Shah · Security engineer · local workspace identity.', ''); });
+  $('#activity-menu').addEventListener('click', openCommandPalette);
+  $('#audit-history').addEventListener('click', () => { setView('overview'); $('#activity-list')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); toast('Audit history', `${state.activity.length} recent local events are shown in the activity trail.`); });
+  $('#editor-focus').addEventListener('click', focusEditor);
+  $('#editor-menu').addEventListener('click', openCommandPalette);
+  $('#filter-button').addEventListener('click', event => {
+    const filterBar = $('.filter-bar');
+    const visible = !filterBar.classList.contains('hidden');
+    filterBar.classList.toggle('hidden', visible);
+    event.currentTarget.setAttribute('aria-expanded', String(!visible));
+  });
+  $('#privacy-toggle').addEventListener('click', event => {
+    const enabled = toggleButton(event.currentTarget);
+    const status = event.currentTarget.closest('.toggle-wrap')?.querySelector('small');
+    if (status) status.textContent = enabled ? 'ON' : 'OFF';
+    try {
+      const settings = JSON.parse(localStorage.getItem('drishti.settings') || '{}');
+      localStorage.setItem('drishti.settings', JSON.stringify({ ...settings, privacyLocalOnly: enabled }));
+    } catch { /* Keep the privacy choice for this session. */ }
+    toast(enabled ? 'Local-only mode enabled' : 'Local-only mode paused', enabled ? 'Source code will remain on this device.' : 'Review network settings before continuing.', enabled ? 'success' : 'warn');
+  });
+  $('#index-document').addEventListener('click', indexWorkspace);
+  $('#knowledge-refresh').addEventListener('click', indexWorkspace);
+  $('#run-benchmark').addEventListener('click', runBenchmark);
+  $('#benchmark-guide').addEventListener('click', () => toast('Benchmark guide', 'Run local benchmark for development-machine timing. Snapdragon/QNN values remain unmeasured until a compatible device is connected.', ''));
+  $('#save-settings').addEventListener('click', saveSettings);
+  $('#scan-on-save-toggle').addEventListener('click', event => toggleButton(event.currentTarget));
+  $$('.language-pill').forEach(pill => {
+    const toggleLanguage = () => pill.classList.toggle('active');
+    pill.addEventListener('click', toggleLanguage);
+    pill.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleLanguage(); } });
+  });
   $('#knowledge-search').addEventListener('click', askLocalQuestion);
   $('#knowledge-input').addEventListener('keydown', event => { if (event.key === 'Enter') askLocalQuestion(); });
   $$('.filter-tab').forEach(tab => tab.addEventListener('click', () => filterFindings(tab.dataset.filter, tab)));
   $$('.settings-tab').forEach(tab => tab.addEventListener('click', () => { $$('.settings-tab').forEach(item => item.classList.remove('active')); tab.classList.add('active'); toast('Settings section', `${tab.textContent.trim()} preferences are ready to configure.`); }));
+  document.addEventListener('keydown', event => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openCommandPalette(); }
+    if (event.key === 'Escape') { closeCommandPalette(); closeDetail(); closePatch(); }
+  });
+  loadSettings();
   connectRealtime();
 }
 

@@ -163,3 +163,17 @@ h2 { font: 600 15px/1.2 var(--display); letter-spacing: -.02em; }
 
 .source-input { display: block; width: 100%; min-height: 365px; resize: vertical; outline: 0; border: 0; padding: 18px 20px 18px 70px; color: #c2d1e3; background: #0b1523; font: 11px/1.8 var(--mono); tab-size: 4; }
 .editor-actions .button { font-size: 9px; }
+.editor-panel.focused { position: fixed; inset: 20px; z-index: 45; min-height: calc(100vh - 40px); overflow: auto; box-shadow: 0 24px 80px rgba(0,0,0,.55); }
+.command-palette { justify-content: center; align-items: flex-start; padding-top: 12vh; }
+.command-panel { width: min(560px, calc(100% - 30px)); background: #0c1726; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); padding: 20px; position: relative; animation: modal-in .2s ease both; }
+.command-header { display: flex; justify-content: space-between; align-items: flex-start; padding-right: 24px; }
+.command-header h2 { margin-top: 7px; }
+.command-input { width: 100%; margin-top: 18px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 6px; outline: 0; color: var(--ink); background: #091321; font: 11px var(--mono); }
+.command-input:focus { border-color: rgba(54,214,200,.55); box-shadow: 0 0 0 3px rgba(54,214,200,.08); }
+.command-list { display: grid; gap: 4px; max-height: 320px; overflow-y: auto; margin-top: 11px; }
+.command-item { display: flex; align-items: center; justify-content: space-between; gap: 15px; width: 100%; border-radius: 5px; padding: 10px 11px; color: var(--muted); background: transparent; text-align: left; }
+.command-item:hover, .command-item:focus { color: var(--ink); background: var(--teal-dim); outline: 0; }
+.command-item small { color: var(--subtle); font-size: 9px; }
+.command-empty, .command-hint { color: var(--subtle); font-size: 9px; }
+.command-empty { padding: 12px 11px; }
+.command-hint { display: block; margin-top: 12px; }

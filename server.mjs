@@ -293,6 +293,33 @@ async function api(req, res, pathname) {
   }
   if (pathname === '/api/findings' && req.method === 'GET') return json(res, 200, { items: state.findings.map(findingSummary) });
   if (pathname === '/api/activity' && req.method === 'GET') return json(res, 200, { items: state.activity });
+  if (pathname === '/api/benchmark' && req.method === 'POST') {
+    const started = performance.now();
+    const findings = analyzeSource(state.source, state.sourceFile);
+    const durationMs = Number((performance.now() - started).toFixed(2));
+    return json(res, 200, {
+      component: 'scanner',
+      durationMs,
+      findings: findings.length,
+      backend: runtimeMetrics().backend,
+      measurementSource: 'LOCAL_DEVELOPMENT',
+      measuredOn: 'This development machine'
+    });
+  }
+  if (pathname === '/api/knowledge/index' && req.method === 'POST') {
+    try {
+      const input = await body(req);
+      const response = await fetch('http://127.0.0.1:8000/api/knowledge/index', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_root: root, project_slug: 'browser-workspace', ...input })
+      });
+      const payload = await response.json().catch(() => ({}));
+      return json(res, response.status, payload);
+    } catch {
+      return json(res, 503, { error: 'The FastAPI backend is required to index the local workspace.' });
+    }
+  }
   if (pathname === '/api/findings/detail' && req.method === 'GET') {
     const finding = state.findings.find(item => item.id === new URL(req.url, `http://${req.headers.host}`).searchParams.get('id'));
     return finding ? json(res, 200, finding) : json(res, 404, { error: 'Finding not found' });
