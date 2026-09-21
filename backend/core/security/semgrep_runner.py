@@ -18,7 +18,11 @@ def run_semgrep(code_snippet: str, language: str, filename: str, timeout: int = 
         findings = []
         for item in json.loads(result.stdout).get("results", []):
             extra = item.get("extra", {})
-            findings.append(FindingSchema(issue_id=item.get("check_id", "SEMGREP"), severity=str(extra.get("severity", "WARNING")).lower(), confidence=0.85, issue_text=extra.get("message", "Semgrep finding"), line_number=int(item.get("start", {}).get("line", 1)), file_path=filename, vuln_type=item.get("check_id", "Semgrep finding"), code_snippet=extra.get("lines", ""), cwe_id=None, test_id=item.get("check_id"), source="semgrep"))
+            metadata = extra.get("metadata") or {}
+            cwe = metadata.get("cwe")
+            if isinstance(cwe, list):
+                cwe = cwe[0] if cwe else None
+            findings.append(FindingSchema(issue_id=item.get("check_id", "SEMGREP"), severity=str(extra.get("severity", "WARNING")).lower(), confidence=float(metadata.get("confidence", 0.85)) if str(metadata.get("confidence", "")).replace(".", "", 1).isdigit() else 0.85, issue_text=extra.get("message", "Semgrep finding"), line_number=int(item.get("start", {}).get("line", 1)), file_path=filename, vuln_type=item.get("check_id", "Semgrep finding"), code_snippet=extra.get("lines", ""), cwe_id=str(cwe) if cwe else None, test_id=item.get("check_id"), source="semgrep", language=language.lower(), detector="Semgrep", column_number=int(item.get("start", {}).get("col", 1)), evidence={"metadata": metadata, "fingerprint": item.get("fingerprint")}))
         return findings
     except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError, ValueError):
         return []

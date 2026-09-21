@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import settings
 from backend.database.session import init_db
-from backend.api import chat, findings, patches, projects, scans, system
+from backend.api import chat, findings, knowledge, patches, projects, runtime, scans, system
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -18,7 +18,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Drishti AI Local Security API", version="0.1.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=[settings.cors_origin, "http://localhost:4173"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=[settings.cors_origin, "http://localhost:4173", "http://127.0.0.1:4173"], allow_credentials=True, allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type", "Authorization"])
 
 
 @app.middleware("http")
@@ -35,6 +35,8 @@ app.include_router(findings.router)
 app.include_router(patches.router)
 app.include_router(chat.router)
 app.include_router(system.router)
+app.include_router(knowledge.router)
+app.include_router(runtime.router)
 
 
 @app.get("/health")

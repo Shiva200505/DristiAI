@@ -50,6 +50,20 @@ class Finding(Base):
     explanation: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(30), default="OPEN")
     confidence: Mapped[float] = mapped_column(Float, default=0.8)
+    rule_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    owasp_category: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    column_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    language: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    detector: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    evidence: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attack_scenario: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recommendation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    patch_status: Mapped[str] = mapped_column(String(40), default="NOT_PROPOSED")
+    verification_status: Mapped[str] = mapped_column(String(40), default="NOT_RUN")
+    verification_results: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
     scan: Mapped[Scan | None] = relationship(back_populates="findings")
     patches: Mapped[list["Patch"]] = relationship(back_populates="finding", cascade="all, delete-orphan")
 
@@ -75,3 +89,13 @@ class BenchmarkRun(Base):
     latency_ms: Mapped[float] = mapped_column(Float)
     device_label: Mapped[str] = mapped_column(String(50))
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class AuditEvent(Base):
+    __tablename__ = "audit_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(80), index=True)
+    entity_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    entity_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    metadata_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

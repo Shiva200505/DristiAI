@@ -1,4 +1,6 @@
 from dataclasses import asdict, dataclass
+import ast
+import subprocess
 from backend.core.scanner import scan_code
 from backend.core.security.findings_parser import FindingSchema
 
@@ -11,6 +13,8 @@ class VerificationResult:
     resolved_count: int
     new_findings: list[dict]
     message: str
+    verification_status: str = "REQUIRES_MANUAL_REVIEW"
+    checks: list[dict] | None = None
 
     def as_dict(self):
         return asdict(self)
@@ -22,5 +26,31 @@ def verify_patch(finding: FindingSchema, original_code: str, patched_code: str, 
     remaining = [item for item in after if item.issue_id == finding.issue_id]
     before_ids = {item.issue_id for item in before}
     new_findings = [item for item in after if item.issue_id not in before_ids]
-    status = "STILL_VULNERABLE" if remaining else "RESOLVED"
-    return VerificationResult(status, [item.as_dict() for item in before], [item.as_dict() for item in after], 0 if remaining else 1, [item.as_dict() for item in new_findings], "The original rule is no longer matched." if not remaining else "The original finding still matches the patched code.")
+    checks = [{"name": "security_rule", "status": "FAIL" if remaining else "PASS", "detail": "Original finding is still detected." if remaining else "Original finding is no longer detected."}]
+    syntax = syntax_check(patched_code, language)
+    checks.append(syntax)
+    checks.append({"name": "new_findings", "status": "FAIL" if new_findings else "PASS", "detail": f"{len(new_findings)} new deterministic finding(s) detected." if new_findings else "No new deterministic findings detected."})
+    if remaining:
+        verification_status = "STILL_VULNERABLE"
+    elif syntax["status"] == "FAIL":
+        verification_status = "PATCH_INVALID"
+    elif new_findings:
+        verification_status = "NEW_FINDINGS_INTRODUCED"
+    else:
+        verification_status = "VERIFIED_RESOLVED"
+    legacy_status = "STILL_VULNERABLE" if verification_status != "VERIFIED_RESOLVED" else "RESOLVED"
+    return VerificationResult(legacy_status, [item.as_dict() for item in before], [item.as_dict() for item in after], 0 if remaining else 1, [item.as_dict() for item in new_findings], "The original rule is no longer matched." if not remaining else "The original finding still matches the patched code.", verification_status, checks)
+
+
+def syntax_check(code: str, language: str) -> dict:
+    normalized = language.lower()
+    try:
+        if normalized in {"python", "py"}:
+            ast.parse(code)
+            return {"name": "syntax", "status": "PASS", "detail": "Python AST parsed successfully."}
+        if normalized in {"javascript", "typescript", "js", "ts"}:
+            result = subprocess.run(["node", "--check"], input=code, capture_output=True, text=True, timeout=5, check=False)
+            return {"name": "syntax", "status": "PASS" if result.returncode == 0 else "FAIL", "detail": "Node syntax check passed." if result.returncode == 0 else "Node syntax check failed."}
+        return {"name": "syntax", "status": "NOT_RUN", "detail": f"No syntax checker configured for {language}."}
+    except (SyntaxError, FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        return {"name": "syntax", "status": "FAIL", "detail": f"Syntax validation failed: {type(exc).__name__}."}

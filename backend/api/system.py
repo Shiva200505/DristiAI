@@ -13,7 +13,7 @@ def hardware():
 @router.get("/runtime")
 def runtime():
     registry = ModelRegistry()
-    return {"backend": registry.device.backend, "model_path": registry.device.model_path, "llm_available": registry.llm_available, "note": registry.device.note}
+    return {**registry.status(), "llm_available": registry.llm_available, "measurement_source": "DEV_MACHINE"}
 
 
 @router.get("/privacy")

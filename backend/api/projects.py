@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from pathlib import Path
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.database.crud import get_or_create_project
 from backend.database.session import get_db
@@ -9,7 +10,10 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 @router.post("")
 def register_project(payload: ProjectCreate, db: Session = Depends(get_db)):
-    project = get_or_create_project(db, payload.name, payload.path, payload.language)
+    project_path = Path(payload.path).expanduser().resolve()
+    if not project_path.is_dir():
+        raise HTTPException(status_code=400, detail={"code": "PROJECT_NOT_FOUND", "message": "Project path must be an existing local directory."})
+    project = get_or_create_project(db, payload.name, str(project_path), payload.language)
     return {"id": project.id, "name": project.name, "path": project.path, "language": project.language}
 
 

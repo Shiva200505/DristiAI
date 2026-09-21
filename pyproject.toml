@@ -15,5 +15,10 @@ dependencies = [
   "psutil>=5.9"
 ]
 
+[project.optional-dependencies]
+security = ["bandit>=1.7", "semgrep>=1.90"]
+ai = ["llama-cpp-python>=0.3", "sentence-transformers>=3.0"]
+qnn = ["onnxruntime>=1.18"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]

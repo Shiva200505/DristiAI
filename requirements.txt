@@ -8,3 +8,5 @@ psutil>=5.9
 # semgrep>=1.90
 # chromadb>=0.5
 # llama-cpp-python>=0.3
+# sentence-transformers>=3.0  # install with a locally cached MiniLM model for semantic retrieval
+# onnxruntime>=1.18         # CPU execution; use a Qualcomm/QNN build only on a supported target

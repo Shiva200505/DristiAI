@@ -19,9 +19,11 @@ def run_bandit(code_snippet: str, language: str, filename: str, timeout: int = 3
             return []
         payload = json.loads(result.stdout)
         findings = []
+        confidence_values = {"HIGH": 0.95, "MEDIUM": 0.75, "LOW": 0.45}
         for item in payload.get("results", []):
             cwe = item.get("issue_cwe") or {}
-            findings.append(FindingSchema(issue_id=item.get("test_id", "BANDIT"), severity=item.get("issue_severity", "MEDIUM").lower(), confidence=float(item.get("issue_confidence", "MEDIUM") == "HIGH" or 0.7), issue_text=item.get("issue_text", "Bandit finding"), line_number=int(item.get("line_number", 1)), file_path=filename, vuln_type=item.get("test_name", "Bandit finding"), code_snippet=item.get("code", ""), cwe_id=str(cwe.get("id")) if cwe.get("id") else None, test_id=item.get("test_id"), source="bandit"))
+            line = int(item.get("line_number", 1))
+            findings.append(FindingSchema(issue_id=item.get("test_id", "BANDIT"), severity=item.get("issue_severity", "MEDIUM").lower(), confidence=confidence_values.get(str(item.get("issue_confidence", "MEDIUM")).upper(), 0.6), issue_text=item.get("issue_text", "Bandit finding"), line_number=line, file_path=filename, vuln_type=item.get("test_name", "Bandit finding"), code_snippet=item.get("code", ""), cwe_id=str(cwe.get("id")) if cwe.get("id") else None, test_id=item.get("test_id"), source="bandit", language="python", detector="Bandit", column_number=int(item.get("col_offset", 0)) + 1, evidence={"more_info": item.get("more_info", ""), "test_id": item.get("test_id", "")}))
         return findings
     except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError, ValueError):
         return []
