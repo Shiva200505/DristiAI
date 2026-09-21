@@ -1,13 +1,25 @@
-# Drishti AI Architecture
+# Architecture
 
-## Demo path
+The production boundary is:
 
-VS Code save → local FastAPI `/api/scans/trigger` → deterministic fallback rules plus optional Bandit/Semgrep → explanation/patch contract → preview → explicit apply → re-scan verification. The existing realtime UI uses the same security concepts through its local Node event stream.
+```text
+Browser UI / VS Code
+        │ typed HTTP + SSE
+FastAPI API and persistence
+        │
+canonical scanner → canonical findings → explainer/retrieval → patcher → verifier
+        │
+runtime/model providers (CPU llama.cpp, GenieX, capability-probed QNN)
+```
 
-## Runtime boundary
+`server.mjs` remains the browser-facing realtime gateway because it owns the existing working UI, file watcher, SSE heartbeat, and demo state. `backend/` is the canonical typed service for integrations, persistence, project/dependency scans, knowledge indexing, model status, and safe patch APIs. The two paths do not define separate security rules: the Python service is the reference contract for new integrations, while the Node engine preserves the existing offline browser demo.
 
-The `ModelRegistry` is the only place that chooses an inference backend. Today it detects an optional local `llama-cpp-python` + GGUF model and otherwise uses a deterministic explanation fallback. A QNN/GenieX adapter is intentionally a separate integration point. The product reports `DEV_MACHINE` until a real QNN provider loads.
+SQLite is local persistence. Additive schema migration keeps MVP databases readable. Audit events contain event metadata, not prompts, secrets, or full source copies.
 
-## Data boundary
+## Boundaries
 
-SQLite, JSON retrieval indexes, findings, patches, and audit data live under `.drishti/`. The FastAPI service has no external network client. The UI's network indicator describes external egress, not its local loopback connection to Drishti.
+- Deterministic rules and external scanners create evidence.
+- AI can explain or propose; it cannot mark a finding verified.
+- Patch application is a separate explicit operation with a SHA-256 precondition.
+- Verification rescans the candidate and checks syntax before reporting `VERIFIED_RESOLVED`.
+- Runtime labels come from provider detection, not from UI configuration alone.

@@ -1,6 +1,3 @@
-# Honest limitations
+# Limitations
 
-- Bandit, Semgrep, ChromaDB, and a local LLM are optional dependencies; the product runs with deterministic local fallback rules when they are missing.
-- The current VS Code extension sends saved file content to `127.0.0.1` only. It does not implement a remote language server.
-- The included Node UI and FastAPI service are parallel demo surfaces while the architecture is being converged; the competition submission should choose one process supervisor.
-- No Snapdragon hardware measurement is included in this repository.
+The deterministic rules are a focused security baseline, not a complete SAST engine. Semgrep/Bandit/OSV results depend on optional installations and their own coverage. TypeScript syntax verification currently uses the available Node check and does not replace `tsc`. The QNN adapter can validate an ONNX Runtime provider/session but does not invent a generic text-generation interface for arbitrary ONNX graphs. The current UI still has a Node realtime gateway and a FastAPI integration service; they share contracts, while a future release can collapse them behind one process.

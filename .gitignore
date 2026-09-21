@@ -1,6 +1,7 @@
 .drishti/*.db
 .drishti/state.json
 .drishti/index-*.json
+.drishti/rollback/
 __pycache__/
 *.pyc
 node_modules/

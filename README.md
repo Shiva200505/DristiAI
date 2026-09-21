@@ -1,46 +1,84 @@
 # Drishti AI
 
-Private, local-first security engineering for developers: detect → understand → fix → verify.
+Private, local-first security engineering for developers: **detect → understand → fix → verify**.
 
-This repository contains a self-contained product demo with a zero-dependency Node runtime. It runs on a normal Windows development machine and reports the active execution backend honestly as `CPU / Development`. Snapdragon/QNN adapters are intentionally represented as a future deployment boundary rather than fabricated hardware measurements.
+Drishti is an actual local workflow, not a chatbot mockup. It scans source code with deterministic rules and optional Bandit/Semgrep adapters, inventories dependencies, explains evidence, creates reviewable candidate patches, applies only explicitly approved changes with a content fingerprint and rollback copy, and verifies the result with a rescan and syntax checks.
 
-The 9-day competition path is now scaffolded in parallel: FastAPI at port 8000, a VS Code save listener, eight vulnerable demo samples, real benchmark scripts, and an optional Electron desktop shell.
+## What is real today
 
-## Run locally
+- Browser workspace with live SSE events, file watching, source editing, finding detail, patch review, verification, local knowledge, runtime, and privacy views.
+- Canonical Python security services under `backend/`: finding normalization, project/incremental scanning, dependency inventory/OSV-Scanner integration, retrieval, model providers, patch safety, verification, persistence, and typed API routes.
+- Deterministic coverage for SQL injection, command injection, path traversal, secrets, weak cryptography, insecure deserialization, XSS, and SSRF-related sinks in Python/JavaScript/TypeScript.
+- Optional real tools: Bandit, Semgrep, OSV-Scanner, llama.cpp, Sentence Transformers, and ONNX Runtime QNN. Missing tools produce an explicit capability state.
+- VS Code save-triggered diagnostics integration and an eight-fixture demo repository.
+
+## Runtime truthfulness
+
+The default development machine needs no model download. It reports `TEMPLATE_FALLBACK` for explanation and uses deterministic evidence. A real local GGUF model is selected only when `DRISHTI_MODEL_PATH` and `llama-cpp-python` are both present. A local GenieX server is selected only when `DRISHTI_GENIEX_BASE_URL` is configured. QNN is selected only after ONNX Runtime reports `QNNExecutionProvider` and a configured model can be initialized.
+
+No Snapdragon utilization, watts, token rate, or latency is invented. Until a physical or remote Snapdragon run is imported, the product says **NOT MEASURED ON SNAPDRAGON HARDWARE**.
+
+## Quick start on Windows
 
 ```powershell
-npm start
+git clone https://github.com/Shiva200505/DristiAI.git
+cd DristiAI
+npm install
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+Start the browser UI and FastAPI service in two terminals:
+
+```powershell
+npm run dev
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open http://localhost:4173. The app uses an in-memory local demo store; restarting the server resets the sample workspace.
+Open `http://localhost:4173`. The browser UI is the realtime local workspace; FastAPI is the typed integration/persistence API used by VS Code and automation. See [local development](docs/local-development.md) for environment variables and model setup.
 
-## Test
+## Verification commands
 
 ```powershell
+npm run build
 npm test
-python -m unittest tests.test_backend -v
+npm run test:backend
 python scripts/demo_prep.py
+npm run benchmark
 ```
 
-## Product slice included
+`npm run verify` runs the complete local smoke sequence. Optional tools are detected at runtime and are never silently reported as having run when unavailable.
 
-- Command center with posture, recent findings, live pipeline, and audit activity.
-- Deterministic local security engine for SQL injection, command injection, hardcoded secrets, and XSS sinks.
-- Finding detail, candidate patch review, controlled apply, and explicit verification states.
-- Live Security editor with scan action and evidence lines.
-- Realtime local event stream (SSE) for findings, scan stages, activity, source updates, and runtime telemetry.
-- Watched `workspace/services/auth.py` file: external edits trigger a local scan automatically.
-- Source editor can save code to the watched workspace file and immediately run the scan pipeline.
-- Local Knowledge, Ask Drishti, Performance, Privacy Center, and Settings views.
-- Honest runtime labeling: CPU development backend, offline/local-only state, and unmeasured Snapdragon metrics.
+## API examples
 
-## Architecture boundary
+```powershell
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/api/system/runtime
+curl -X POST http://127.0.0.1:8000/api/scans/project -H "Content-Type: application/json" -d '{"project_root":"demo-repo","use_external_tools":false}'
+curl -X POST http://127.0.0.1:8000/api/scans/dependencies -H "Content-Type: application/json" -d '{"project_root":".","allow_network":false}'
+```
 
-`public/` is the UI. `src/security-engine.mjs` is the deterministic analyzer and patch contract. `server.mjs` provides local API routes, an SSE event stream, file watching, and a small local JSON persistence seam under `.drishti/`. The runtime object is the intended adapter point for a later ONNX Runtime QNN or Qualcomm AI Runtime implementation.
+## Architecture
 
-## Realtime behavior
+The browser entrypoint remains the existing polished Node/SSE workspace so the demo stays reliable. The backend has one canonical security core and typed FastAPI boundary for persistence, VS Code, project scans, dependency scans, knowledge indexing, model/runtime status, and patch operations. The Node server owns browser session events and delegates no security claim to the UI. Details are in [architecture](docs/architecture.md) and [AI architecture](docs/ai-architecture.md).
 
-The browser opens `/api/events` as a local Server-Sent Events stream. The server broadcasts `scan:start`, `scan:stage`, `scan:complete`, `findings`, `activity`, `source:update`, and `runtime` events. The sample workspace file is watched with the Node filesystem watcher, so changing `workspace/services/auth.py` outside the UI also triggers analysis.
+## Documentation
 
-The working security layer is deterministic and local today; it does not require a cloud service or downloaded model. A semantic model is an optional next adapter, not a hidden dependency. To add it properly, the project will need a local model artifact plus its supported runtime (for example an ONNX/CPU adapter during development, then a validated QNN/Qualcomm runtime on Snapdragon hardware). No Snapdragon performance number is claimed until that runtime is actually measured.
+- [Local development](docs/local-development.md)
+- [Security engine](docs/security-engine.md)
+- [Patch verification](docs/patch-verification.md)
+- [Qualcomm path](docs/qualcomm.md)
+- [Snapdragon deployment](docs/snapdragon-deployment.md)
+- [Model management](docs/model-management.md)
+- [Privacy](docs/privacy.md)
+- [Threat model](docs/threat-model.md)
+- [VS Code extension](docs/vscode-extension.md)
+- [Benchmarking](docs/benchmarking.md)
+- [Demo guide](docs/demo-guide.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Limitations](docs/limitations.md)
+
+## Project language
+
+Drishti is not a guarantee of security or legal compliance. Findings are evidence for engineering review. AI output is untrusted until a developer reviews the diff and verification result. Qualcomm, Snapdragon, QNN, AI Hub, and GenieX references describe supported deployment paths and are not an endorsement or partnership claim.
