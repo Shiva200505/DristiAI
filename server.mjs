@@ -1,5 +1,6 @@
 import http from 'node:http';
 import os from 'node:os';
+import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { watch } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
@@ -11,9 +12,10 @@ const publicDir = join(root, 'public');
 const workspaceDir = join(root, 'workspace');
 const sampleFile = join(workspaceDir, 'services', 'auth.py');
 const stateFile = join(root, '.drishti', 'state.json');
+const rollbackDir = join(root, '.drishti', 'rollback');
 const port = Number(process.env.PORT || 4173);
 
-const demoSource = `from flask import Flask, request\n+import sqlite3\n+\n+app = Flask(__name__)\n+\n+@app.get('/users/<user_id>')\n+def get_user(user_id):\n+    db = sqlite3.connect('app.db')\n+    query = f"SELECT * FROM users WHERE id = {user_id}"\n+    return db.execute(query).fetchone()\n+`;
+const demoSource = `from flask import Flask, request\nimport sqlite3\n\napp = Flask(__name__)\n\n@app.get('/users/<user_id>')\ndef get_user(user_id):\n    db = sqlite3.connect('app.db')\n    query = f"SELECT * FROM users WHERE id = {user_id}"\n    return db.execute(query).fetchone()\n`;
 
 const state = {
   project: { name: 'Atlas Payments', branch: 'feature/risk-review', files: 28, language: 'Python' },
@@ -115,6 +117,7 @@ const eventClients = new Set();
 let lastCpuSample = process.cpuUsage();
 let lastCpuAt = Date.now();
 let watchTimer;
+let backendRuntime = null;
 
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
@@ -124,6 +127,7 @@ function sendEvent(res, event, payload) {
 
 function broadcast(event, payload) {
   for (const client of eventClients) {
+    if (client.writableEnded || client.destroyed) { eventClients.delete(client); continue; }
     try { sendEvent(client, event, payload); } catch { eventClients.delete(client); }
   }
 }
@@ -134,18 +138,35 @@ function runtimeMetrics() {
   const elapsed = Math.max(1, now - lastCpuAt);
   lastCpuSample = process.cpuUsage();
   lastCpuAt = now;
+  const configuredBackend = backendRuntime?.backend;
+  const displayBackend = configuredBackend && configuredBackend !== 'TEMPLATE_FALLBACK' ? configuredBackend : 'CPU / Development';
   return {
-    backend: 'CPU',
-    mode: 'Development',
+    backend: displayBackend,
+    mode: backendRuntime?.runtime || 'LOCAL_DEVELOPMENT',
     network: 'offline',
-    model: 'Rules + local heuristics',
+    model: backendRuntime?.model_id || 'Deterministic rules; no generative model installed',
     measuredOn: 'This development machine',
+    npu: backendRuntime?.backend && backendRuntime.backend !== 'TEMPLATE_FALLBACK' && backendRuntime?.provider?.available ? 'Provider health reported available; utilization not measured' : 'NOT MEASURED ON SNAPDRAGON HARDWARE',
+    measurementSource: 'LOCAL_DEVELOPMENT',
     processCpuPercent: Math.round(((usage.user + usage.system) / 1000 / elapsed) * 100),
     memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     scanCount: state.stats.scanCount,
     lastScanMs: state.stats.lastScanMs,
     scan: state.scan
   };
+}
+
+async function refreshBackendRuntime() {
+  try {
+    const response = await fetch('http://127.0.0.1:8000/api/system/runtime');
+    if (response.ok) backendRuntime = await response.json();
+  } catch {
+    backendRuntime = null;
+  }
+}
+
+function sourceHash(source) {
+  return createHash('sha256').update(source, 'utf8').digest('hex');
 }
 
 async function persistState() {
@@ -300,8 +321,18 @@ async function api(req, res, pathname) {
     if (!finding) return json(res, 404, { error: 'Finding not found' });
     const action = applyMatch[2];
     if (action === 'apply') {
+      const input = await body(req);
+      const currentHash = sourceHash(state.source);
+      if (input.expectedSha256 && input.expectedSha256 !== currentHash) return json(res, 409, { error: 'The workspace changed since patch preview. Refresh the finding before applying.', code: 'STALE_PATCH' });
+      if (!state.source.includes(finding.evidence)) return json(res, 409, { error: 'The evidence is no longer present in the workspace. Refresh the finding before applying.', code: 'PATCH_CONTEXT_MISSING' });
+      await mkdir(rollbackDir, { recursive: true });
+      const rollbackPath = join(rollbackDir, `${Date.now()}-${finding.ruleId}.bak`);
+      await writeFile(rollbackPath, state.source);
       state.source = state.source.replace(finding.evidence, finding.patch);
+      await writeFile(sampleFile, state.source);
       finding.status = 'patched';
+      finding.verification = { status: 'pending', checkedAt: 'just now', remaining: null, rollbackPath: '.drishti/rollback' };
+      broadcast('source:update', { file: state.sourceFile, source: state.source });
     }
     if (action === 'verify') {
       const remaining = analyzeSource(state.source, finding.file).some(item => item.ruleId === finding.ruleId);
@@ -333,11 +364,13 @@ async function serve(req, res) {
   if (url.pathname.startsWith('/api/')) return api(req, res, url.pathname);
   let requested = url.pathname === '/' ? '/index.html' : url.pathname;
   const safePath = normalize(join(publicDir, requested));
-  if (!safePath.startsWith(publicDir)) return json(res, 403, { error: 'Forbidden' });
+  if (safePath !== publicDir && !safePath.startsWith(publicDir + '\\') && !safePath.startsWith(publicDir + '/')) return json(res, 403, { error: 'Forbidden' });
   try {
     const content = await readFile(safePath);
     const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml' };
-    res.writeHead(200, { 'Content-Type': types[extname(safePath)] || 'application/octet-stream' });
+    const headers = { 'Content-Type': types[extname(safePath)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
+    if (extname(safePath) === '.html') headers['Content-Security-Policy'] = "default-src 'self'; connect-src 'self' http://127.0.0.1:8000 http://localhost:8000; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; frame-ancestors 'none'";
+    res.writeHead(200, headers);
     res.end(content);
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -346,6 +379,9 @@ async function serve(req, res) {
 }
 
 await hydrateState();
+refreshBackendRuntime();
 try { watch(sampleFile, queueWatchedScan); } catch { /* File watching is best effort on restricted filesystems. */ }
 setInterval(() => broadcast('runtime', runtimeMetrics()), 1000);
+setInterval(() => broadcast('heartbeat', { at: new Date().toISOString() }), 15000);
+setInterval(refreshBackendRuntime, 5000);
 http.createServer(serve).listen(port, () => console.log(`Drishti AI running at http://localhost:${port}`));

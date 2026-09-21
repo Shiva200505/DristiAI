@@ -1,6 +1,6 @@
 # Electron desktop shell
 
-The current competition-tested renderer is served by the root Node app so it can be developed without bundler overhead. This Electron shell starts that local server and opens it in a hardened BrowserWindow. `src/renderer/App.jsx` is the React migration seam for packaging the renderer once the UI components are moved into React.
+The competition-tested renderer is served by the root Node app so the browser and packaged desktop experience share one UI. This Electron shell starts that local server and opens it in a hardened BrowserWindow. The React component is a real same-origin-capable wrapper for future Vite packaging; it does not create a second business-logic path.
 
 ```powershell
 cd frontend

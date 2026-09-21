@@ -210,6 +210,21 @@ function setPipelineComplete(scan) {
 
 function applyRuntimeMetrics(metrics) {
   state.runtime = metrics;
+  const backend = metrics.backend || 'CPU / Development';
+  const model = metrics.model || 'No model reported';
+  const measuredOn = metrics.measuredOn || metrics.measurementSource || 'Unknown source';
+  if ($('#runtime-top-label')) $('#runtime-top-label').textContent = backend;
+  if ($('#pipeline-backend-label')) $('#pipeline-backend-label').textContent = `${backend} backend`;
+  if ($('#pipeline-measurement-label')) $('#pipeline-measurement-label').textContent = measuredOn;
+  if ($('#runtime-card-title')) $('#runtime-card-title').textContent = backend;
+  if ($('#runtime-model-label')) $('#runtime-model-label').textContent = model;
+  if ($('#runtime-model-detail')) $('#runtime-model-detail').textContent = metrics.npu || measuredOn;
+  if ($('#runtime-backend-label')) $('#runtime-backend-label').textContent = backend;
+  if ($('#runtime-network-label')) $('#runtime-network-label').textContent = metrics.network || 'Unknown';
+  if ($('#runtime-scan-label')) $('#runtime-scan-label').textContent = metrics.lastScanMs ? `${metrics.lastScanMs} ms` : 'Not recorded';
+  if ($('#runtime-measurement-note')) $('#runtime-measurement-note').textContent = metrics.npu || `Measurement source: ${measuredOn}`;
+  if ($('#benchmark-scan-value')) $('#benchmark-scan-value').textContent = metrics.lastScanMs ? `${metrics.lastScanMs} ms` : '—';
+  if ($('#benchmark-scan-time')) $('#benchmark-scan-time').textContent = metrics.lastScanMs ? 'latest scan' : '—';
   const cpu = Math.min(100, Math.max(0, Number(metrics.processCpuPercent || 0)));
   const memory = Math.min(100, Math.max(0, Number(metrics.memoryMb || 0) / 16));
   const cpuBar = $('#cpu-bar'); const cpuValue = $('#cpu-value'); const memoryBar = $('#memory-bar'); const memoryValue = $('#memory-value');

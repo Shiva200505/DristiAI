@@ -11,7 +11,11 @@
   "contributes": {
     "commands": [
       { "command": "drishti.analyzeFile", "title": "Drishti: Analyze Current File" },
-      { "command": "drishti.analyzeSelection", "title": "Drishti: Analyze Selection" }
+      { "command": "drishti.analyzeSelection", "title": "Drishti: Analyze Selection" },
+      { "command": "drishti.openPanel", "title": "Drishti: Open Security Workspace" },
+      { "command": "drishti.explainFinding", "title": "Drishti: Explain Finding" },
+      { "command": "drishti.generatePatch", "title": "Drishti: Generate Secure Patch" },
+      { "command": "drishti.verifyFix", "title": "Drishti: Verify Fix" }
     ],
     "viewsContainers": { "activitybar": [{ "id": "drishti", "title": "Drishti AI", "icon": "media/drishti.svg" }] },
     "views": { "drishti": [{ "id": "drishti.findings", "name": "Live Findings" }] },

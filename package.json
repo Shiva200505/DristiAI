@@ -6,9 +6,15 @@
   "description": "Local-first security engineering workspace for developers.",
   "scripts": {
     "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "build": "node --check server.mjs && node --check src/security-engine.mjs && node --check public/app.js",
+    "lint": "node --check server.mjs && node --check src/security-engine.mjs",
+    "typecheck": "python -m compileall -q backend scripts benchmarks tests",
     "backend": "python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000",
     "demo:prep": "python scripts/demo_prep.py",
     "benchmark": "python benchmarks/run_benchmarks.py --component scanner",
-    "test": "node tests/security-engine.test.mjs"
+    "test": "node tests/security-engine.test.mjs",
+    "test:backend": "python -m unittest tests.test_backend -v",
+    "verify": "npm run build && npm test && npm run test:backend && python scripts/demo_prep.py"
   }
 }

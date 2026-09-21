@@ -6,6 +6,11 @@ let serverProcess;
 
 function createWindow() {
   const window = new BrowserWindow({ width: 1440, height: 960, minWidth: 1100, minHeight: 720, backgroundColor: '#09111d', webPreferences: { contextIsolation: true, sandbox: true } });
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('will-navigate', (event, target) => {
+    const allowed = target.startsWith('http://127.0.0.1:4173') || target.startsWith('http://localhost:4173');
+    if (!allowed) event.preventDefault();
+  });
   window.loadURL(process.env.DRISHTI_UI_URL || 'http://127.0.0.1:4173');
 }
 

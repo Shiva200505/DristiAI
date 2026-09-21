@@ -1,9 +1,11 @@
 import React from 'react';
 
 /**
- * Electron currently hosts the proven renderer in ../public through the local UI server.
- * This component is the React migration seam for the final packaged desktop build.
+ * The packaged shell uses the same canonical browser workspace as development.
+ * Keeping this wrapper real prevents a second, divergent desktop UI from
+ * becoming a placeholder product surface.
  */
 export default function App() {
-  return <main style={{ padding: 32, background: '#09111d', color: '#f4f7fb', minHeight: '100vh', fontFamily: 'system-ui' }}>Drishti AI renderer bootstrap</main>;
+  const url = window.__DRISHTI_UI_URL__ || 'http://127.0.0.1:4173';
+  return <iframe title="Drishti AI security workspace" src={url} style={{ border: 0, width: '100%', height: '100vh', background: '#09111d' }} />;
 }
