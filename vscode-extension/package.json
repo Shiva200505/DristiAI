@@ -1,0 +1,20 @@
+{
+  "name": "drishti-ai-security",
+  "displayName": "Drishti AI Security",
+  "description": "Private local security analysis for saved code changes.",
+  "version": "0.1.0",
+  "publisher": "drishti-ai",
+  "engines": { "vscode": "^1.80.0" },
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "categories": ["Linters", "Other"],
+  "contributes": {
+    "commands": [
+      { "command": "drishti.analyzeFile", "title": "Drishti: Analyze Current File" },
+      { "command": "drishti.analyzeSelection", "title": "Drishti: Analyze Selection" }
+    ],
+    "viewsContainers": { "activitybar": [{ "id": "drishti", "title": "Drishti AI", "icon": "media/drishti.svg" }] },
+    "views": { "drishti": [{ "id": "drishti.findings", "name": "Live Findings" }] },
+    "configuration": { "properties": { "drishti.backendUrl": { "type": "string", "default": "http://127.0.0.1:8000", "description": "Local Drishti FastAPI URL" }, "drishti.debounceMs": { "type": "number", "default": 2000, "minimum": 200 } } }
+  }
+}
