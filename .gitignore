@@ -1,0 +1,7 @@
+.drishti/*.db
+.drishti/state.json
+.drishti/index-*.json
+__pycache__/
+*.pyc
+node_modules/
+vscode-extension/node_modules/

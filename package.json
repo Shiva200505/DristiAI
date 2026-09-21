@@ -1,0 +1,14 @@
+{
+  "name": "drishti-ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first security engineering workspace for developers.",
+  "scripts": {
+    "start": "node server.mjs",
+    "backend": "python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000",
+    "demo:prep": "python scripts/demo_prep.py",
+    "benchmark": "python benchmarks/run_benchmarks.py --component scanner",
+    "test": "node tests/security-engine.test.mjs"
+  }
+}
