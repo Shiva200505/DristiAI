@@ -12,6 +12,7 @@ FINDING_STATUSES = {
     "PATCH_APPLIED",
     "PATCH_VERIFIED",
     "REQUIRES_REVIEW",
+    "NOT_PROPOSED",
 }
 
 OWASP_BY_CWE = {
@@ -24,6 +25,11 @@ OWASP_BY_CWE = {
     "CWE-502": "A08:2021 Software and Data Integrity Failures",
     "CWE-798": "A07:2021 Identification and Authentication Failures",
     "CWE-918": "A10:2021 Server-Side Request Forgery",
+    "CWE-95": "A03:2021 Injection",
+    "CWE-295": "A02:2021 Cryptographic Failures",
+    "CWE-338": "A02:2021 Cryptographic Failures",
+    "CWE-347": "A07:2021 Identification and Authentication Failures",
+    "CWE-377": "A04:2021 Insecure Design",
 }
 
 
@@ -88,7 +94,7 @@ class FindingSchema:
         self.recommendation = self.recommendation or self.explanation
         self.code_snippet = mask_secrets(self.code_snippet)
         self.surrounding_context = mask_secrets(self.surrounding_context)
-        if self.source in {"deterministic", "bandit", "semgrep"} and self.patch_status == "NOT_PROPOSED":
+        if self.source in {"deterministic", "ast", "bandit", "semgrep", "osv-scanner"} and self.patch_status == "NOT_PROPOSED":
             self.patch_status = "RULE_DETECTED"
         if not self.evidence:
             self.evidence = {"detector": self.detector, "rule_id": self.rule_id}

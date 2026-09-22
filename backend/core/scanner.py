@@ -1,12 +1,15 @@
 import re
+import shutil
+import time
 from pathlib import Path
 from backend.core.security.bandit_runner import run_bandit
+from backend.core.security.ast_analysis import analyze_python, ast_capabilities
 from backend.core.security.findings_parser import FindingSchema
 from backend.core.security.semgrep_runner import run_semgrep
 
 
 PATTERNS = [
-    ("DRISHTI-SQL-001", "critical", "SQL injection", r"(?:SELECT|INSERT|UPDATE|DELETE)[^\n]*(?:\+|\{|%\s|\.format\()", "CWE-89", "SQL query is built with interpolated input. Use a bound parameter."),
+    ("DRISHTI-SQL-001", "critical", "SQL injection", r"\b(?:SELECT|INSERT|UPDATE|DELETE)\s+[^\n]*(?:\+|\{|%\s|\.format\()", "CWE-89", "SQL query is built with interpolated input. Use a bound parameter."),
     ("DRISHTI-SHELL-006", "high", "Command injection", r"subprocess\.[^(]+\([^\n]*shell\s*=\s*True", "CWE-78", "Pass an argument list with shell=False and validate values."),
     ("DRISHTI-PATH-008", "high", "Path traversal", r"open\([^\n]*(?:user_input|request\.|filename)", "CWE-22", "Resolve and validate the path against an allowed base directory."),
     ("DRISHTI-SECRET-014", "high", "Hardcoded secret", r"(?:password|secret|api[_-]?key|token|AWS_SECRET_KEY)\s*=\s*[\"'][^\"']+[\"']", "CWE-798", "Load the secret from an environment-backed secret store."),
@@ -14,6 +17,11 @@ PATTERNS = [
     ("DRISHTI-DESER-019", "critical", "Insecure deserialization", r"pickle\.loads?\(", "CWE-502", "Use a safe, constrained serialization format."),
     ("DRISHTI-XSS-021", "medium", "Cross-site scripting", r"\.innerHTML\s*=|dangerouslySetInnerHTML", "CWE-79", "Render text through an escaping path or sanitize with an allowlist."),
     ("DRISHTI-SSRF-025", "high", "Server-side request forgery", r"(?:requests\.(?:get|post)|fetch)\([^\n]*(?:url|request\.)", "CWE-918", "Allowlist destinations and block private network ranges."),
+    ("DRISHTI-YAML-026", "high", "Unsafe YAML loading", r"yaml\.load\((?![^\n]*SafeLoader)", "CWE-502", "Use yaml.safe_load or an explicit SafeLoader for untrusted YAML."),
+    ("DRISHTI-EVAL-022", "critical", "Dynamic code execution", r"\b(?:eval|exec)\s*\(", "CWE-95", "Avoid dynamic code execution and use a constrained parser or allowlist."),
+    ("DRISHTI-TLS-030", "high", "TLS certificate verification disabled", r"(?:requests|httpx)\.[^(]+\([^\n]*verify\s*=\s*False", "CWE-295", "Keep TLS certificate verification enabled."),
+    ("DRISHTI-TEMP-031", "high", "Insecure temporary file", r"tempfile\.mktemp\(", "CWE-377", "Use NamedTemporaryFile or mkstemp for atomic temporary-file creation."),
+    ("DRISHTI-JWT-029", "high", "JWT signature verification disabled", r"verify_signature\s*[:=]\s*False", "CWE-347", "Require JWT signature verification and an algorithm allowlist."),
 ]
 
 
@@ -60,6 +68,8 @@ def mask_for_evidence(value: str) -> str:
 
 def scan_code(code: str, filename: str, language: str = "python", use_external_tools: bool = True) -> list[FindingSchema]:
     findings = fallback_scan(code, filename, language)
+    if language.lower() in {"python", "py"}:
+        findings.extend(analyze_python(code, filename))
     if use_external_tools:
         findings.extend(run_bandit(code, language, filename))
         findings.extend(run_semgrep(code, language, filename))
@@ -74,7 +84,29 @@ def scan_code(code: str, filename: str, language: str = "python", use_external_t
 
 
 def source_priority(source: str) -> int:
-    return {"semgrep": 3, "bandit": 2, "deterministic": 1, "osv-scanner": 3}.get(source, 0)
+    return {"semgrep": 4, "bandit": 3, "ast": 2, "deterministic": 1, "osv-scanner": 4}.get(source, 0)
+
+
+def scanner_capabilities(use_external_tools: bool = True) -> dict:
+    tools = {
+        "deterministic": {"installed": True, "executed": True, "status": "available", "findings": None},
+        "ast": ast_capabilities(),
+        "bandit": {"installed": shutil.which("bandit") is not None, "executed": bool(use_external_tools and shutil.which("bandit")), "status": "available" if shutil.which("bandit") else "optional_unavailable", "findings": None},
+        "semgrep": {"installed": shutil.which("semgrep") is not None, "executed": bool(use_external_tools and shutil.which("semgrep")), "status": "available" if shutil.which("semgrep") else "optional_unavailable", "findings": None},
+    }
+    return tools
+
+
+def scan_code_with_report(code: str, filename: str, language: str = "python", use_external_tools: bool = True) -> tuple[list[FindingSchema], dict]:
+    started = time.perf_counter()
+    findings = scan_code(code, filename, language, use_external_tools)
+    report = scanner_capabilities(use_external_tools)
+    report["deterministic"]["findings"] = sum(item.source == "deterministic" for item in findings)
+    report["ast"]["findings"] = sum(item.source == "ast" for item in findings)
+    report["bandit"]["findings"] = sum(item.source == "bandit" for item in findings)
+    report["semgrep"]["findings"] = sum(item.source == "semgrep" for item in findings)
+    report["duration_ms"] = round((time.perf_counter() - started) * 1000, 2)
+    return findings, report
 
 
 def scan_file(path: str | Path, root: str | Path | None = None, use_external_tools: bool = True) -> list[FindingSchema]:
@@ -106,4 +138,4 @@ def scan_project(root: str | Path, changed_files: list[str] | None = None, use_e
                 scanned_files += 1
         except (OSError, UnicodeDecodeError) as exc:
             errors.append({"file": str(file_path), "error": str(exc)})
-    return {"root": str(project_root), "scanned_files": scanned_files, "changed_files": bool(changed_files), "findings": [item.as_dict() for item in findings], "errors": errors}
+    return {"root": str(project_root), "scanned_files": scanned_files, "changed_files": bool(changed_files), "findings": [item.as_dict() for item in findings], "errors": errors, "scanner_capabilities": scanner_capabilities(use_external_tools)}

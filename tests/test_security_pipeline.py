@@ -1,5 +1,7 @@
+import os
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from backend.core.ai.model_registry import InferenceBackend, ModelRegistry
 from backend.core.patcher.apply import PatchApplyError, resolve_allowed_path
@@ -8,6 +10,7 @@ from backend.core.patcher.patch_generator import generate_patch
 from backend.core.patcher.verifier import verify_patch
 from backend.core.scanner import scan_project
 from backend.core.security.findings_parser import FindingSchema
+from backend.utils.paths import resolve_approved_workspace
 
 
 class SecurityPipelineTests(unittest.TestCase):
@@ -48,13 +51,22 @@ class SecurityPipelineTests(unittest.TestCase):
         registry = ModelRegistry()
         self.assertIn(registry.device.backend, {InferenceBackend.TEMPLATE_FALLBACK, InferenceBackend.CPU_LLAMA_CPP, InferenceBackend.GENIEX_OPENAI})
 
+    def test_local_only_blocks_remote_geniex(self):
+        with patch.dict(os.environ, {"DRISHTI_LOCAL_ONLY": "true", "DRISHTI_GENIEX_BASE_URL": "https://example.invalid"}, clear=False):
+            registry = ModelRegistry()
+            self.assertFalse(registry.device.available)
+            self.assertIn("remote provider blocked", registry.device.reason)
+
     def test_patch_path_cannot_escape_workspace(self):
         with self.assertRaises(PatchApplyError):
             resolve_allowed_path("../../outside.txt", [Path.cwd()])
 
+    def test_api_workspace_path_must_be_approved(self):
+        with self.assertRaises(ValueError):
+            resolve_approved_workspace(Path.cwd().parent)
+
     def test_patch_apply_creates_rollback_and_checks_content(self):
-        target = Path(".drishti") / "patch-pipeline-test.py"
-        target.parent.mkdir(exist_ok=True)
+        target = Path("patch-pipeline-test.py")
         original = "value = 1\n"
         rollback_path = None
         try:

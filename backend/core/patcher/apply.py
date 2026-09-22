@@ -32,6 +32,10 @@ def sha256_text(value: str) -> str:
 
 def apply_patch(file_path: str, original_code: str, patched_code: str, expected_sha256: str | None = None, allowed_roots: list[Path] | None = None) -> dict:
     target = resolve_allowed_path(file_path, allowed_roots)
+    if any(part.lower() in {".git", ".drishti", "node_modules", "__pycache__"} for part in target.parts):
+        raise PatchApplyError("The patch target is a protected generated or repository-control path.")
+    if target.suffix.lower() in {".pem", ".key", ".p12", ".pfx"} or target.name.lower() in {".env", ".env.local", "id_rsa", "id_ed25519"}:
+        raise PatchApplyError("Credential and private-key files cannot be modified by the patch pipeline.")
     if not target.is_file():
         raise PatchApplyError("The patch target does not exist.")
     current = target.read_text(encoding="utf-8")
@@ -40,6 +44,8 @@ def apply_patch(file_path: str, original_code: str, patched_code: str, expected_
         raise PatchApplyError("The file changed since the patch preview; refresh the finding before applying.")
     if expected_sha256 and expected_sha256 != current_hash:
         raise PatchApplyError("The expected file fingerprint does not match the current file.")
+    if len(original_code) > 200_000 or len(patched_code) > 200_000:
+        raise PatchApplyError("Patch input exceeds the 200 KB safety limit.")
     if patched_code == original_code:
         raise PatchApplyError("The candidate patch does not change the file.")
     rollback_dir = settings.root / ".drishti" / "rollback"

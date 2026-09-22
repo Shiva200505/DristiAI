@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from backend.core.retrieval.indexer import index_path
 from backend.core.retrieval.retriever import retrieve
 from backend.core.retrieval.vector_store import LocalVectorStore
+from backend.utils.paths import resolve_approved_workspace
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 
@@ -20,7 +21,12 @@ class SearchRequest(BaseModel):
 
 @router.post("/index")
 def index_project(payload: IndexRequest):
-    return {"indexed_chunks": index_path(payload.project_root, LocalVectorStore(payload.project_slug or "default"))}
+    try:
+        project_root = resolve_approved_workspace(payload.project_root)
+    except ValueError as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail={"code": "PROJECT_PATH_NOT_APPROVED", "message": str(exc)}) from exc
+    return {"indexed_chunks": index_path(project_root, LocalVectorStore(payload.project_slug or "default"))}
 
 
 @router.post("/search")

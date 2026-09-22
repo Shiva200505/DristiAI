@@ -12,6 +12,7 @@ class Settings:
     database_url: str = os.getenv("DRISHTI_DATABASE_URL", f"sqlite:///{(ROOT / '.drishti' / 'drishti.db').as_posix()}")
     model_path: str | None = os.getenv("DRISHTI_MODEL_PATH")
     local_only: bool = os.getenv("DRISHTI_LOCAL_ONLY", "true").lower() not in {"0", "false", "no"}
+    workspace_root: str | None = os.getenv("DRISHTI_WORKSPACE_ROOT")
     cors_origin: str = os.getenv("DRISHTI_CORS_ORIGIN", "http://localhost:5173")
     scan_timeout_seconds: int = int(os.getenv("DRISHTI_SCAN_TIMEOUT", "30"))
 

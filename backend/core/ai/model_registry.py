@@ -6,7 +6,9 @@ import importlib.util
 import json
 import os
 import platform
+from pathlib import Path
 import time
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
@@ -32,14 +34,39 @@ class DeviceInfo:
     reason: str = ""
 
 
-class FallbackProvider:
+class ModelProvider:
+    name = "UNKNOWN"
+
+    def health_check(self) -> dict:
+        return {"available": False, "backend": self.name, "semantic": False, "reason": "Provider health is not implemented."}
+
+    def generate(self, _prompt: str, **_kwargs):
+        raise RuntimeError(f"{self.name} does not provide text generation.")
+
+    def stream(self, prompt: str, **kwargs):
+        yield from self.generate(prompt, **kwargs)
+
+    def metadata(self) -> dict:
+        return {"provider": self.name, "supports_chat": False, "supports_structured_output": False, "supports_embeddings": False}
+
+    def supports_chat(self) -> bool:
+        return False
+
+    def supports_structured_output(self) -> bool:
+        return False
+
+    def supports_embeddings(self) -> bool:
+        return False
+
+
+class FallbackProvider(ModelProvider):
     name = "TEMPLATE_FALLBACK"
 
     def health_check(self) -> dict:
         return {"available": True, "backend": self.name, "semantic": False, "message": "Deterministic fallback is active; no generative model is loaded."}
 
 
-class UnavailableProvider:
+class UnavailableProvider(ModelProvider):
     def __init__(self, backend: str, reason: str):
         self.name = backend
         self.reason = reason
@@ -48,7 +75,7 @@ class UnavailableProvider:
         return {"available": False, "backend": self.name, "semantic": False, "reason": self.reason}
 
 
-class GenieXProvider:
+class GenieXProvider(ModelProvider):
     name = "GENIEX_OPENAI"
 
     def __init__(self, base_url: str, model_id: str):
@@ -72,8 +99,17 @@ class GenieXProvider:
         if content:
             yield content
 
+    def supports_chat(self) -> bool:
+        return True
 
-class CpuLlamaProvider:
+    def supports_structured_output(self) -> bool:
+        return True
+
+    def metadata(self) -> dict:
+        return {"provider": self.name, "base_url": self.base_url, "model_id": self.model_id, "supports_chat": True, "supports_structured_output": True, "supports_embeddings": False}
+
+
+class CpuLlamaProvider(ModelProvider):
     name = "CPU_LLAMA_CPP"
 
     def __init__(self, model_path: str):
@@ -86,6 +122,15 @@ class CpuLlamaProvider:
 
     def generate(self, prompt: str, max_tokens: int = 256):
         yield from self.backend.generate(prompt, max_tokens)
+
+    def supports_chat(self) -> bool:
+        return True
+
+    def supports_structured_output(self) -> bool:
+        return True
+
+    def metadata(self) -> dict:
+        return {"provider": self.name, "model_path": self.model_path, "runtime": "llama.cpp", "supports_chat": True, "supports_structured_output": True, "supports_embeddings": False}
 
 
 def _json_request(url: str, method: str, payload: dict | None = None) -> dict:
@@ -109,6 +154,10 @@ class ModelRegistry:
         if self.runtime in {"geniex", "geniex_openai", "qairt"} or self.geniex_base_url:
             if not self.geniex_base_url:
                 return DeviceInfo(InferenceBackend.GENIEX_OPENAI, None, machine, "GenieX selected but DRISHTI_GENIEX_BASE_URL is not configured.", self.model_id, "GenieX", available=False, reason="missing base URL")
+            host = urlparse(self.geniex_base_url).hostname
+            local_only = os.getenv("DRISHTI_LOCAL_ONLY", "true").lower() not in {"0", "false", "no"}
+            if local_only and host not in {"127.0.0.1", "localhost", "::1"}:
+                return DeviceInfo(InferenceBackend.GENIEX_OPENAI, None, machine, "Remote GenieX endpoints are blocked while DRISHTI_LOCAL_ONLY is enabled.", self.model_id, "GenieX", available=False, reason="remote provider blocked by local-only policy")
             return DeviceInfo(InferenceBackend.GENIEX_OPENAI, None, machine, "GenieX local OpenAI-compatible provider configured; health is checked on demand.", self.model_id, "GenieX", available=True, reason="")
         if self.runtime in {"qnn", "qnn_onnx", "qualcomm"}:
             from backend.core.ai.backends.qnn_backend import QnnBackend
@@ -141,4 +190,4 @@ class ModelRegistry:
 
     def status(self) -> dict:
         provider = self.get_provider()
-        return {**asdict(self.device), "backend": self.device.backend.value, "provider": provider.health_check()}
+        return {**asdict(self.device), "backend": self.device.backend.value, "provider": {**provider.health_check(), "metadata": provider.metadata() }, "model": {"id": self.device.model_id, "path": self.device.model_path, "runtime": self.device.runtime, "precision": self.device.precision, "format": "GGUF" if self.device.backend == InferenceBackend.CPU_LLAMA_CPP else None, "installed": bool(self.device.model_path and Path(self.device.model_path).is_file()), "validation": "NOT_RUN"}}

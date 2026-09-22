@@ -18,4 +18,4 @@ def runtime():
 
 @router.get("/privacy")
 def privacy():
-    return {"local_only": True, "egress_bytes": 0, "external_services": {"llm": False, "analytics": False, "profiling": False}, "last_network_event": "Never recorded"}
+    return {"local_only": True, "network_policy": "loopback-only unless an operator explicitly enables dependency/provider network access", "external_egress": "NOT_MEASURED", "egress_bytes": None, "external_services": {"llm": False, "analytics": False, "profiling": False}, "last_network_event": "No external network event recorder is configured"}

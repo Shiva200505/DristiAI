@@ -39,12 +39,12 @@ class ExplainRequest(BaseModel):
 
 class PatchRequest(BaseModel):
     finding: dict
-    original_code: str
+    original_code: str = Field(max_length=200_000)
     language: str = "Python"
 
 
 class PatchApplyRequest(PatchRequest):
     file_path: str
-    patched_code: str
+    patched_code: str = Field(max_length=200_000)
     expected_sha256: str | None = None
     project_root: str | None = None

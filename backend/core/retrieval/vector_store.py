@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from backend.config import settings
 from backend.core.ai.embedder import LocalEmbedder
+from backend.core.security.findings_parser import mask_secrets
 
 
 @dataclass
@@ -32,15 +33,21 @@ class LocalVectorStore:
                     document.embedding = None
 
     def add_documents(self, documents: list[Document]) -> None:
+        existing = {(document.file, document.section): document for document in self.documents}
+        for document in documents:
+            document.text = mask_secrets(document.text)
+            previous = existing.get((document.file, document.section))
+            previous_hash = (previous.metadata or {}).get("content_hash") if previous else None
+            current_hash = (document.metadata or {}).get("content_hash")
+            if previous and previous_hash == current_hash and (previous.metadata or {}).get("embedding_backend") == self.embedder.backend:
+                document.embedding = previous.embedding
         missing = [document.text for document in documents if document.embedding is None]
         vectors = iter(self.embedder.embed(missing))
         for document in documents:
             if document.embedding is None:
                 document.embedding = next(vectors)
-            document.metadata = document.metadata or {"embedding_model": self.embedder.metadata()["model"], "embedding_backend": self.embedder.backend}
-        keys = {(document.file, document.section): document for document in self.documents}
-        keys.update({(document.file, document.section): document for document in documents})
-        self.documents = list(keys.values())
+            document.metadata = {**(document.metadata or {}), "embedding_model": self.embedder.metadata()["model"], "embedding_backend": self.embedder.backend}
+        self.documents = list({(document.file, document.section): document for document in documents}.values())
         self.path.write_text(json.dumps([asdict(item) for item in self.documents], indent=2), encoding="utf-8")
 
     def search(self, query: str, n_results: int = 5) -> list[dict]:
@@ -48,9 +55,13 @@ class LocalVectorStore:
         query_vector = self.embedder.embed([query])[0]
         ranked = []
         for document in self.documents:
-            lexical = sum(token in document.text.lower() for token in tokens) / max(len(tokens), 1)
+            lowered = document.text.lower()
+            lexical = sum(token in lowered for token in tokens) / max(len(tokens), 1)
+            metadata = document.metadata or {}
+            path_text = f"{document.file} {metadata.get('symbol', '')}".lower()
+            path_relevance = sum(token in path_text for token in tokens) / max(len(tokens), 1)
             semantic = cosine_similarity(query_vector, document.embedding or [])
-            score = (0.55 * semantic) + (0.45 * lexical)
+            score = (0.50 * semantic) + (0.35 * lexical) + (0.15 * path_relevance)
             if score > 0:
                 item = asdict(document)
                 item.pop("embedding", None)
@@ -60,7 +71,7 @@ class LocalVectorStore:
         return [item for _score, item in sorted(ranked, key=lambda item: item[0], reverse=True)[:n_results]]
 
     def stats(self) -> dict:
-        return {"doc_count": len({item.file for item in self.documents}), "chunk_count": len(self.documents), "size_bytes": self.path.stat().st_size if self.path.exists() else 0, "embedding": self.embedder.metadata(), "index_version": 2}
+        return {"doc_count": len({item.file for item in self.documents}), "chunk_count": len(self.documents), "size_bytes": self.path.stat().st_size if self.path.exists() else 0, "embedding": self.embedder.metadata(), "index_version": 3, "incremental": True, "secret_masking": True}
 
 
 def cosine_similarity(left: list[float], right: list[float]) -> float:

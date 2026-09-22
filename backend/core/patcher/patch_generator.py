@@ -2,6 +2,9 @@ import re
 from backend.core.patcher.diff_engine import unified_diff
 from backend.core.security.findings_parser import FindingSchema
 
+MAX_PATCH_LINES = 120
+MAX_CHANGED_LINES = 80
+
 
 def generate_patch(finding: FindingSchema, original_code: str) -> dict:
     replacement = original_code
@@ -33,5 +36,9 @@ def generate_patch(finding: FindingSchema, original_code: str) -> dict:
     elif finding.issue_id == "DRISHTI-SHELL-006" and "shell=True" in original_code:
         replacement = original_code.replace(", shell=True", ", shell=False").replace("shell=True", "shell=False")
         method = "structured_shell_flag_candidate"
-    status = "candidate" if replacement != original_code else "requires_review"
-    return {"original_code": original_code, "patched_code": replacement, "diff": unified_diff(original_code, replacement, finding.file_path), "confidence": finding.confidence, "status": status, "method": method, "explanation": explanation, "source_finding": finding.as_dict()}
+    diff = unified_diff(original_code, replacement, finding.file_path)
+    changed_lines = sum(1 for line in diff.splitlines() if line.startswith(("+", "-")) and not line.startswith(("+++", "---")))
+    bounded = len(replacement) <= 200_000 and len(diff.splitlines()) <= MAX_PATCH_LINES and changed_lines <= MAX_CHANGED_LINES
+    status = "candidate" if replacement != original_code and bounded else "requires_review"
+    validation = {"bounded": bounded, "changed_lines": changed_lines, "diff_lines": len(diff.splitlines()), "max_changed_lines": MAX_CHANGED_LINES, "max_diff_lines": MAX_PATCH_LINES}
+    return {"original_code": original_code, "patched_code": replacement if bounded else original_code, "diff": diff, "confidence": finding.confidence, "status": status, "method": method, "explanation": explanation, "validation": validation, "source_finding": finding.as_dict()}
