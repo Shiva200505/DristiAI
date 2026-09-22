@@ -38,6 +38,25 @@ python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 
 Open `http://localhost:4173`. The browser UI is the realtime local workspace; FastAPI is the typed integration/persistence API used by VS Code and automation. See [local development](docs/local-development.md) for environment variables and model setup.
 
+### Monitor a real repository
+
+The live UI watches the configured workspace, scans the selected source file on save, and can scan every supported source file in the workspace. It is not limited to the checked-in example under `workspace/`.
+
+```powershell
+$env:DRISHTI_WORKSPACE_ROOT = 'C:\your\actual\repository'
+$env:DRISHTI_SOURCE_FILE = 'src\api\users.py'
+$env:DRISHTI_ALLOW_EXTERNAL_WORKSPACE = 'true'
+
+# Set the same workspace variables in the terminal that starts FastAPI.
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+# In a second terminal, set the variables again and start the UI.
+npm run dev
+```
+
+Choose the active file from the source selector in Live Security. `Scan now` scans the configured workspace; `Run analysis` scans only the active file. The server watches supported source files and publishes findings through SSE as files change.
+
+Replace the example paths before running. If `DRISHTI_WORKSPACE_ROOT` is left as `C:\path\to\your\repository`, the gateway ignores it and safely uses the included `workspace/` directory.
+
 ## Verification commands
 
 ```powershell
@@ -49,6 +68,8 @@ npm run benchmark
 ```
 
 `npm run verify` runs the complete local smoke sequence. Optional tools are detected at runtime and are never silently reported as having run when unavailable.
+
+For capability and model diagnostics run `npm run doctor`, `npm run models:list`, and `npm run models:validate -- --path C:\models\model.gguf`. `npm run self-scan` writes the current canonical repository scan to `docs/self-scan-report.md`.
 
 ## API examples
 
